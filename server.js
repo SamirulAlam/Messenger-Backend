@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Pusher from "pusher";
 import Cors from "cors";
+import mongoMessages from "./dbModel.js";
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -32,12 +33,43 @@ mongoose.connect(connection_url,{
 
 mongoose.connection.once("open",()=>{
     console.log("DB Connected");
+
+    const changeStream=mongoose.connection.collection("messages").watch();
+    changeStream.on("change",(change)=>{
+        pusher.trigger("messages", "newMessages", {
+            "change": change
+          });
+    })
 });
 
 //real time 
 
 //api routes
 app.get("/",(req, res) => {res.status(200).send("hello")})
+
+app.post("/save/messages",(req, res) => {
+    const dbMessage =req.body;
+    mongoMessages.create(dbMessage,(err,data)=>{
+        if(err){
+            res.status(500).send(err);
+        }else{
+            res.status(201).send(data)
+        }
+    })
+})
+
+app.get("/retrieve/conversation",(req, res) => {
+    mongoMessages.find((err,data)=>{
+        if(err){
+            res.status(500).send(err);
+        }else{
+            data.sort((b,a)=>{
+                return a.timestamp-b.timestamp
+            })
+            res.status(200).send(data)
+        }
+    })
+})
 
 //listener
 app.listen(port,()=>console.log(`listening to port ${port}`));
